@@ -96,6 +96,8 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $this->_membershipID = $this->callAPISuccess('Membership', 'create', [
       'contact_id' => $this->_individualId,
       'membership_type_id' => $this->membershipTypeAnnualFixedID,
+      'join_date' => '2020-04-13',
+      'source' => 'original_source',
     ])['id'];
 
     $this->paymentInstruments = $this->callAPISuccess('Contribution', 'getoptions', ['field' => 'payment_instrument_id'])['values'];
@@ -239,7 +241,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
       ],
       'credit_card_type' => 'Visa',
       'billing_first_name' => 'Test',
-      'billing_middlename' => 'Last',
+      'billing_middle_name' => 'Last',
       'billing_street_address-5' => '10 Test St',
       'billing_city-5' => 'Test',
       'billing_state_province_id-5' => '1003',
@@ -248,7 +250,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     ]);
     $contribution = $this->callAPISuccessGetSingle('Contribution', ['contact_id' => $this->_individualId, 'is_test' => TRUE, 'return' => ['total_amount', 'tax_amount']]);
     $this->assertEquals(50, $contribution['total_amount']);
-    $this->assertEquals(5, $contribution['tax_amount']);
+    $this->assertEquals(4.55, $contribution['tax_amount']);
   }
 
   /**
@@ -378,6 +380,20 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
 
     $form->testSubmit($params);
     $membership = $this->callAPISuccessGetSingle('Membership', ['contact_id' => $this->_individualId]);
+    $this->assertEquals('2020-04-13', $membership['join_date']);
+    $this->assertEquals(date('Y-01-01'), $membership['start_date']);
+    $nextYear = date('Y') + 1;
+    $this->assertEquals(date($nextYear . '-01-31'), $membership['end_date']);
+    $expectedStatus = (strtotime(date('Y-07-14')) > time()) ? 'New' : 'Current';
+    $this->assertEquals(CRM_Core_PseudoConstant::getKey('CRM_Member_BAO_Membership', 'status_id', $expectedStatus), $membership['status_id']);
+    $this->assertNotEmpty($membership['contribution_recur_id']);
+    $this->assertNotEmpty('original_source', $membership['source']);
+
+    $log = $this->callAPISuccessGetSingle('MembershipLog', ['membership_id' => $membership['id'], 'options' => ['limit' => 1, 'sort' => 'id DESC']]);
+    $this->assertEquals(date($nextYear . '-01-01'), $log['start_date']);
+    $this->assertEquals(date($nextYear . '-01-31'), $log['end_date']);
+    $this->assertEquals(date('Y-m-d'), $log['modified_date']);
+
     $contributionRecur = $this->callAPISuccessGetSingle('ContributionRecur', ['contact_id' => $this->_individualId]);
     $this->assertEquals($contributionRecur['id'], $membership['contribution_recur_id']);
     $this->assertEquals(0, $contributionRecur['is_email_receipt']);
@@ -479,7 +495,6 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
       'auto_renew' => '0',
       'max_related' => '',
       'num_terms' => '2',
-      'source' => '',
       'total_amount' => '50.00',
       //Member dues, see data.xml
       'financial_type_id' => '2',
@@ -533,7 +548,6 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
       'auto_renew' => '0',
       'max_related' => '',
       'num_terms' => '2',
-      'source' => '',
       'total_amount' => '50.00',
       //Member dues, see data.xml
       'financial_type_id' => '2',
@@ -597,7 +611,6 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
       'auto_renew' => '0',
       'max_related' => '',
       'num_terms' => '2',
-      'source' => '',
       'total_amount' => '50.00',
       //Member dues, see data.xml
       'financial_type_id' => '2',
@@ -650,7 +663,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $form->controller = new CRM_Core_Controller();
     $form->_bltID = 5;
     $form->_mode = $mode;
-    $form->_id = $this->_membershipID;
+    $form->setEntityId($this->_membershipID);
     $form->preProcess();
     return $form;
   }
@@ -664,7 +677,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     return [
       'cid' => $this->_individualId,
       'price_set_id' => 0,
-      'join_date' => date('m/d/Y', time()),
+      'join_date' => date('Y-m-d'),
       'start_date' => '',
       'end_date' => '',
       'campaign_id' => '',
@@ -674,7 +687,6 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
       'is_recur' => 1,
       'max_related' => 0,
       'num_terms' => '1',
-      'source' => '',
       'total_amount' => $this->formatMoneyInput('7800.90'),
       //Member dues, see data.xml
       'financial_type_id' => '2',
@@ -698,6 +710,52 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
       'billing_postal_code-5' => '90210',
       'billing_country_id-5' => '1228',
     ];
+  }
+
+  /**
+   * Test renewing an expired membership.
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   */
+  public function testSubmitRenewExpired() {
+    $form = $this->getForm(NULL);
+    $this->createLoggedInUser();
+    $originalMembership = $this->callAPISuccessGetSingle('membership', []);
+    $this->callAPISuccess('Membership', 'create', [
+      'status_id' => 'Expired',
+      'id' => $originalMembership['id'],
+      'start_date' => '2019-03-01',
+      'join_date' => '2019-03-01',
+      'end_date' => '2020-03-24',
+      'source' => 'sauce',
+    ]);
+
+    $params = [
+      'contact_id' => $this->_individualId,
+      'membership_type_id' => [23, $this->membershipTypeAnnualFixedID],
+      'renewal_date' => '2020-06-10',
+      'financial_type_id' => '2',
+      'num_terms' => '1',
+      'from_email_address' => '"Demonstrators Anonymous" <info@example.org>',
+      'record_contribution' => '1',
+      'total_amount' => '100.00',
+      'receive_date' => '2020-06-05 06:05:00',
+      'payment_instrument_id' => '4',
+      'contribution_status_id' => '1',
+      'send_receipt' => '1',
+    ];
+    $form->testSubmit($params);
+    $renewedMembership = $this->callAPISuccessGetSingle('Membership', ['id' => $originalMembership['id']]);
+    $this->assertEquals('sauce', $renewedMembership['source']);
+    $this->assertEquals(date('Y-01-01'), $renewedMembership['start_date']);
+    $this->assertEquals(date('2019-03-01'), $renewedMembership['join_date']);
+    $this->assertEquals(date('Y-12-31'), $renewedMembership['end_date']);
+    $log = $this->callAPISuccessGetSingle('MembershipLog', ['membership_id' => $renewedMembership['id'], 'options' => ['limit' => 1, 'sort' => 'id DESC']]);
+    $this->assertEquals(date('Y-01-01'), $log['start_date']);
+    $this->assertEquals(date('Y-12-31'), $log['end_date']);
+    $this->assertEquals(date('Y-m-d'), $log['modified_date']);
+    $this->assertEquals(CRM_Core_PseudoConstant::getKey('CRM_Member_BAO_Membership', 'status_id', 'Current'), $log['status_id']);
   }
 
 }

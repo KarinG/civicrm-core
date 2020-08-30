@@ -250,7 +250,7 @@ class CRM_Utils_Token {
 
   /**
    * @param $token
-   * @param $domain
+   * @param CRM_Core_BAO_Domain $domain
    * @param bool $html
    * @param bool $escapeSmarty
    *
@@ -261,7 +261,7 @@ class CRM_Utils_Token {
     // we have to do this because this function is
     // called only when we find a token in the string
 
-    $loc = &$domain->getLocationValues();
+    $loc = $domain->getLocationValues();
 
     if (!in_array($token, self::$_tokens['domain'])) {
       $value = "{domain.$token}";
@@ -1806,8 +1806,10 @@ class CRM_Utils_Token {
         break;
 
       case 'receive_date':
+      case 'receipt_date':
         $value = CRM_Utils_Array::retrieveValueRecursive($contribution, $token);
-        $value = CRM_Utils_Date::customFormat($value, NULL, ['j', 'm', 'Y']);
+        $config = CRM_Core_Config::singleton();
+        $value = CRM_Utils_Date::customFormat($value, $config->dateformatDatetime);
         break;
 
       default:

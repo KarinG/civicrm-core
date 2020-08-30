@@ -212,14 +212,6 @@
     <add>1.4</add>
   </field>
   <field>
-    <name>date_parts</name>
-    <type>varchar</type>
-    <length>255</length>
-    <comment>which date part included in display </comment>
-    <add>1.4</add>
-    <drop>3.1</drop>
-  </field>
-  <field>
     <name>date_format</name>
     <type>varchar</type>
     <title>Field Data Format</title>
@@ -281,6 +273,17 @@
     <add>5.6</add>
     <onDelete>SET NULL</onDelete>
   </foreignKey>
+  <field>
+    <name>serialize</name>
+    <type>int unsigned</type>
+    <title>Serialize</title>
+    <length>255</length>
+    <comment>Serialization method - a non-null value indicates a multi-valued field.</comment>
+    <pseudoconstant>
+      <callback>CRM_Core_SelectValues::fieldSerialization</callback>
+    </pseudoconstant>
+    <add>5.27</add>
+  </field>
   <field>
     <name>filter</name>
     <type>varchar</type>

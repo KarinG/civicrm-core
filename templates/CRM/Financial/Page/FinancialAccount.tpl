@@ -20,7 +20,7 @@
 <div class="crm-content-block crm-block">
   {if $action ne 1 and $action ne 2}
     <div class="action-link">
-      <a href="{crmURL q="action=add&reset=1"}" id="newFinancialAccount-top" class="button"><span><i class="crm-i fa-plus-circle"></i> {ts}Add Financial Account{/ts}</span></a>
+      <a href="{crmURL q="action=add&reset=1"}" id="newFinancialAccount-top" class="button"><span><i class="crm-i fa-plus-circle" aria-hidden="true"></i> {ts}Add Financial Account{/ts}</span></a>
     </div>
   {/if}
 
@@ -62,14 +62,14 @@
 
       {if $action ne 1 and $action ne 2}
         <div class="action-link">
-          <a href="{crmURL q="action=add&reset=1"}" id="newFinancialAccount-bottom" class="button"><span><i class="crm-i fa-plus-circle"></i> {ts}Add Financial Account{/ts}</span></a>
+          <a href="{crmURL q="action=add&reset=1"}" id="newFinancialAccount-bottom" class="button"><span><i class="crm-i fa-plus-circle" aria-hidden="true"></i> {ts}Add Financial Account{/ts}</span></a>
         </div>
       {/if}
       </div>
     </div>
   {else}
     <div class="messages status">
-      <div class="icon inform-icon"></div>
+      {icon icon="fa-info-circle"}{/icon}
       {capture assign=crmURL}{crmURL q="action=add&reset=1"}{/capture}
       {ts 1=$crmURL}There are no Financial Account entered. You can <a href='%1'>add one</a>.{/ts}
     </div>

@@ -497,7 +497,7 @@ class CRM_Member_Form_Membership extends CRM_Member_Form {
       $totalAmount = $values['minimum_fee'] ?? NULL;
       //CRM-18827 - override the default value if total_amount is submitted
       if (!empty($this->_submitValues['total_amount'])) {
-        $totalAmount = $this->_submitValues['total_amount'];
+        $totalAmount = CRM_Utils_Rule::cleanMoney($this->_submitValues['total_amount']);
       }
       // build membership info array, which is used when membership type is selected to:
       // - set the payment information block
@@ -958,13 +958,9 @@ class CRM_Member_Form_Membership extends CRM_Member_Form {
         $form->_bltID
       ));
 
-      $date = CRM_Utils_Date::format($form->_params['credit_card_exp_date']);
-      $date = CRM_Utils_Date::mysqlToIso($date);
-      $form->assign('credit_card_exp_date', $date);
-      $form->assign('credit_card_number',
-        CRM_Utils_System::mungeCreditCard($form->_params['credit_card_number'])
-      );
-      $form->assign('credit_card_type', $form->_params['credit_card_type']);
+      $valuesForForm = CRM_Contribute_Form_AbstractEditPayment::formatCreditCardDetails($form->_params);
+      $form->assignVariables($valuesForForm, ['credit_card_exp_date', 'credit_card_type', 'credit_card_number']);
+
       $form->assign('contributeMode', 'direct');
       $form->assign('isAmountzero', 0);
       $form->assign('is_pay_later', 0);
@@ -1784,23 +1780,24 @@ class CRM_Member_Form_Membership extends CRM_Member_Form {
     $buttonName = $this->controller->getButtonName();
     $session = CRM_Core_Session::singleton();
 
-    if ($this->_context === 'standalone') {
-      if ($buttonName == $this->getButtonName('upload', 'new')) {
-        $session->replaceUserContext(CRM_Utils_System::url('civicrm/member/add',
+    if ($buttonName == $this->getButtonName('upload', 'new')) {
+      if ($this->_context === 'standalone') {
+        $url = CRM_Utils_System::url('civicrm/member/add',
           'reset=1&action=add&context=standalone'
-        ));
+        );
       }
       else {
-        $session->replaceUserContext(CRM_Utils_System::url('civicrm/contact/view',
-          "reset=1&cid={$this->_contactID}&selectedChild=member"
-        ));
+        $url = CRM_Utils_System::url('civicrm/contact/view/membership',
+          "reset=1&action=add&context=membership&cid={$this->_contactID}"
+        );
       }
     }
-    elseif ($buttonName == $this->getButtonName('upload', 'new')) {
-      $session->replaceUserContext(CRM_Utils_System::url('civicrm/contact/view/membership',
-        "reset=1&action=add&context=membership&cid={$this->_contactID}"
-      ));
+    else {
+      $url = CRM_Utils_System::url('civicrm/contact/view',
+        "reset=1&cid={$this->_contactID}&selectedChild=member"
+      );
     }
+    $session->replaceUserContext($url);
   }
 
   /**

@@ -413,7 +413,7 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
       'contact_id' => $this->_individualId,
       'contribution_status_id' => 'Completed',
     ]);
-    $this->assertEquals('50', $contribution['total_amount']);
+    $this->assertEquals('50.00', $contribution['total_amount']);
     $this->assertEquals(.08, $contribution['fee_amount']);
     $this->assertEquals(49.92, $contribution['net_amount']);
     $this->assertEquals('tx', $contribution['trxn_id']);
@@ -464,7 +464,7 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
       'contact_id' => $this->_individualId,
       'contribution_status_id' => 'Completed',
     ]);
-    $this->assertEquals('50', $contribution['total_amount']);
+    $this->assertEquals('50.00', $contribution['total_amount']);
     $this->assertEquals(0, $contribution['non_deductible_amount']);
   }
 
@@ -1694,6 +1694,59 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     ]);
     $this->assertEquals($membershipPayment['membership_id'], $membership['id']);
     $this->membershipDelete($membership['id']);
+  }
+
+  /**
+   * Test no warnings or errors during preProcess when editing.
+   */
+  public function testPreProcessContributionEdit() {
+    // Simulate a contribution in pending status
+    $contribution = $this->callAPISuccess(
+      'Contribution',
+      'create',
+      array_merge($this->_params, ['contribution_status_id' => 'Pending'])
+    );
+
+    // set up the form to edit the contribution and call preProcess
+    $form = $this->getFormObject('CRM_Contribute_Form_Contribution');
+    $_REQUEST['cid'] = $this->_individualId;
+    $_REQUEST['id'] = $contribution['id'];
+    $form->_action = CRM_Core_Action::UPDATE;
+    $form->preProcess();
+
+    // Check something while we're here
+    $this->assertEquals($contribution['id'], $form->_values['contribution_id']);
+
+    unset($_REQUEST['cid']);
+    unset($_REQUEST['id']);
+  }
+
+  /**
+   * Mostly just check there's no errors opening the Widget tab on contribution
+   * pages.
+   */
+  public function testOpeningWidgetAdminPage() {
+    $page_id = $this->callAPISuccess('ContributionPage', 'create', [
+      'title' => 'my page',
+      'financial_type_id' => $this->_financialTypeId,
+      'payment_processor' => $this->paymentProcessorID,
+    ])['id'];
+
+    $form = new CRM_Contribute_Form_ContributionPage_Widget();
+    $form->controller = new CRM_Core_Controller_Simple('CRM_Contribute_Form_ContributionPage_Widget', 'Widget');
+
+    $form->set('reset', '1');
+    $form->set('action', 'update');
+    $form->set('id', $page_id);
+
+    ob_start();
+    $form->controller->_actions['display']->perform($form, 'display');
+    $contents = ob_get_contents();
+    ob_end_clean();
+
+    // The page contents load later by ajax, so there's just the surrounding
+    // html available now, but we can check at least one thing while we're here.
+    $this->assertStringContainsString("selectedTab = 'widget';", $contents);
   }
 
 }

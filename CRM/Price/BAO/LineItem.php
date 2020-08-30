@@ -186,8 +186,8 @@ WHERE li.contribution_id = %1";
    */
   public static function getLineItems($entityId, $entity = 'participant', $isQuick = FALSE, $isQtyZero = TRUE, $relatedEntity = FALSE) {
     $whereClause = $fromClause = NULL;
-    $selectClause = "
-      SELECT    li.id,
+    $selectClause = '
+      SELECT li.id,
       li.label,
       li.contribution_id,
       li.qty,
@@ -205,19 +205,19 @@ WHERE li.contribution_id = %1";
       li.price_field_value_id,
       li.financial_type_id,
       li.tax_amount,
-      pfv.description";
+      pfv.description';
 
-    $condition = "li.entity_id = %2.id AND li.entity_table = 'civicrm_%2'";
+    $condition = "li.entity_id = civicrm_%2.id AND li.entity_table = 'civicrm_%2'";
     if ($relatedEntity) {
-      $condition = "li.contribution_id = %2.id ";
+      $condition = 'li.contribution_id = civicrm_%2.id ';
     }
 
     $fromClause = "
-      FROM      civicrm_%2 as %2
+      FROM civicrm_%2
       LEFT JOIN civicrm_line_item li ON ({$condition})
-      LEFT JOIN civicrm_price_field_value pfv ON ( pfv.id = li.price_field_value_id )
+      LEFT JOIN civicrm_price_field_value pfv ON (pfv.id = li.price_field_value_id)
       LEFT JOIN civicrm_price_field pf ON (pf.id = li.price_field_id )";
-    $whereClause = " WHERE     %2.id = %1";
+    $whereClause = " WHERE civicrm_%2.id = %1";
     $orderByClause = " ORDER BY pf.weight, pfv.weight";
 
     if ($isQuick) {
@@ -426,17 +426,8 @@ WHERE li.contribution_id = %1";
         }
         if (!empty($contributionDetails->id)) {
           $line['contribution_id'] = $contributionDetails->id;
-          if ($line['entity_table'] == 'civicrm_contribution') {
+          if ($line['entity_table'] === 'civicrm_contribution') {
             $line['entity_id'] = $contributionDetails->id;
-          }
-          // CRM-19094: entity_table is set to civicrm_membership then ensure
-          // the entityId is set to membership ID not contribution by default
-          elseif ($line['entity_table'] == 'civicrm_membership' && !empty($line['entity_id']) && $line['entity_id'] == $contributionDetails->id) {
-            $membershipId = CRM_Core_DAO::getFieldValue('CRM_Member_DAO_MembershipPayment', $contributionDetails->id, 'membership_id', 'contribution_id');
-            if ($membershipId && (int) $membershipId !== (int) $line['entity_id']) {
-              $line['entity_id'] = $membershipId;
-              Civi::log()->warning('Per https://lab.civicrm.org/dev/core/issues/15 this data fix should not be required. Please log a ticket at https://lab.civicrm.org/dev/core with steps to get this.', ['civi.tag' => 'deprecated']);
-            }
           }
         }
 

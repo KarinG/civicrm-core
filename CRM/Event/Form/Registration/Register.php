@@ -45,9 +45,9 @@ class CRM_Event_Form_Registration_Register extends CRM_Event_Form_Registration {
    * Skip duplicate check.
    *
    * This can be set using hook_civicrm_buildForm() to override the registration dupe check.
-   * CRM-7604
    *
    * @var bool
+   * @see https://issues.civicrm.org/jira/browse/CRM-7604
    */
   public $_skipDupeRegistrationCheck = FALSE;
 
@@ -391,8 +391,7 @@ class CRM_Event_Form_Registration_Register extends CRM_Event_Form_Registration {
       self::buildAmount($this);
     }
 
-    $pps = $this->getProcessors();
-    if ($this->getContactID() === 0 && !$this->_values['event']['is_multiple_registrations']) {
+    if ($contactID === 0 && !$this->_values['event']['is_multiple_registrations']) {
       //@todo we are blocking for multiple registrations because we haven't tested
       $this->addCIDZeroOptions();
     }
@@ -405,9 +404,7 @@ class CRM_Event_Form_Registration_Register extends CRM_Event_Form_Registration {
 
     $this->assign('bypassPayment', $bypassPayment);
 
-    $userID = $this->getContactID();
-
-    if (!$userID) {
+    if (!$contactID) {
       $createCMSUser = FALSE;
 
       if ($this->_values['custom_pre_id']) {
@@ -629,6 +626,7 @@ class CRM_Event_Form_Registration_Register extends CRM_Event_Form_Registration {
           }
         }
       }
+      $form->_priceSet['id'] = $form->_priceSet['id'] ?? $form->_priceSetId;
       $form->assign('priceSet', $form->_priceSet);
     }
     else {
@@ -1157,7 +1155,7 @@ class CRM_Event_Form_Registration_Register extends CRM_Event_Form_Registration {
     // CRM-3907, skip check for preview registrations
     // CRM-4320 participant need to walk wizard
     if (
-      ($form->_mode == 'test' || $form->_allowConfirmation)
+      ($form->getPaymentMode() === 'test' || $form->_allowConfirmation)
     ) {
       return FALSE;
     }

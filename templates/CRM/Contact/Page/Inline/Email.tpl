@@ -12,7 +12,7 @@
   <div class="crm-clear crm-inline-block-content" {if $permission EQ 'edit'}title="{ts}Add or edit email{/ts}"{/if}>
   {if $permission EQ 'edit'}
     <div class="crm-edit-help">
-      <span class="crm-i fa-pencil"></span> {if empty($email)}{ts}Add email{/ts}{else}{ts}Add or edit email{/ts}{/if}
+      <span class="crm-i fa-pencil" aria-hidden="true"></span> {if empty($email)}{ts}Add email{/ts}{else}{ts}Add or edit email{/ts}{/if}
     </div>
   {/if}
   {if empty($email)}
@@ -29,7 +29,7 @@
     <div class="crm-summary-row {if $item.is_primary eq 1}primary{/if}">
       <div class="crm-label">
         {$item.location_type} {ts}Email{/ts}
-        {if $privacy.do_not_email}{privacyFlag field=do_not_email}{elseif $item.on_hold}{privacyFlag field=on_hold}{/if}
+        {privacyFlag field=do_not_email condition=$privacy.do_not_email}{privacyFlag field=on_hold condition=$item.on_hold}
       </div>
       <div class="crm-content crm-contact_email">
         {if !$item.on_hold and !$privacy.do_not_email}

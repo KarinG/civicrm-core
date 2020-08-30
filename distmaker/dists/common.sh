@@ -107,6 +107,9 @@ function dm_install_coreext() {
 ## reldirs=$(dm_core_exts)
 function dm_core_exts() {
   echo ext/sequentialcreditnotes
+  echo ext/flexmailer
+  echo ext/eventcart
+  echo ext/financialacls
 }
 
 ## Copy all packages
@@ -254,6 +257,21 @@ function dm_install_cvext() {
   # cv dl -b '@https://civicrm.org/extdir/ver=4.7.25|cms=Drupal/com.iatspayments.civicrm.xml' --destination=$PWD/iatspayments
   cv dl -b "@https://civicrm.org/extdir/ver=$DM_VERSION|cms=Drupal/$1.xml" --to="$2"
 }
+
+## Export a list of patch files from a git repo
+## usage: dm_export_patches <src-repo> <out-dir> <range>
+## ex: dm_export_patches "$HOME/src/somerepo" "/tmp/export" 5.1.2..5.1.6
+function dm_export_patches() {
+  if [ ! -d "$1" ]; then
+    echo "ignore: $1"
+    return
+  fi
+  echo "Export \"$1\" ($3) to \"$2\""
+  pushd "$1" >> /dev/null
+    git format-patch "$3" -o "$2"
+  popd >> /dev/null
+}
+
 
 ## Edit a file by applying a regular expression.
 ## Note: We'd rather just call "sed", but it differs on GNU+BSD.

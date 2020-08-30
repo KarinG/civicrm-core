@@ -48,10 +48,6 @@ class CRM_Core_Region {
    * @param string $name
    */
   public function __construct($name) {
-    // Templates injected into regions should normally be file names, but sometimes inline notation is handy.
-    require_once 'CRM/Core/Smarty/resources/String.php';
-    civicrm_smarty_register_string_resource();
-
     $this->_name = $name;
     $this->_snippets = [];
 
@@ -68,7 +64,7 @@ class CRM_Core_Region {
   /**
    * Add a snippet of content to a region.
    *
-   * @code
+   * ```
    * CRM_Core_Region::instance('page-header')->add(array(
    *   'markup' => '<div style="color:red">Hello!</div>',
    * ));
@@ -81,7 +77,7 @@ class CRM_Core_Region {
    * CRM_Core_Region::instance('page-header')->add(array(
    *   'callback' => 'myextension_callback_function',
    * ));
-   * @endcode
+   * ```
    *
    * Note: This function does not perform any extra encoding of markup, script code, or etc. If
    * you're passing in user-data, you must clean it yourself.
@@ -223,8 +219,7 @@ class CRM_Core_Region {
           break;
 
         default:
-          require_once 'CRM/Core/Error.php';
-          CRM_Core_Error::fatal(ts('Snippet type %1 is unrecognized',
+          throw new CRM_Core_Exception(ts('Snippet type %1 is unrecognized',
             [1 => $snippet['type']]));
       }
     }
@@ -253,49 +248,5 @@ class CRM_Core_Region {
     }
     return 0;
   }
-
-  /**
-   * Add block of static HTML to a region.
-   *
-   * @param string $markup
-   *   HTML.
-   *
-   * public function addMarkup($markup) {
-   * return $this->add(array(
-   * 'type' => 'markup',
-   * 'markup' => $markup,
-   * ));
-   * }
-   *
-   * /**
-   * Add a Smarty template file to a region.
-   *
-   * Note: File is not evaluated until the page is rendered
-   *
-   * @param string $template
-   *   Path to the Smarty template file.
-   *
-   * public function addTemplate($template) {
-   * return $this->add(array(
-   * 'type' => 'template',
-   * 'template' => $template,
-   * ));
-   * }
-   *
-   * /**
-   * Use a callback function to extend a region.
-   *
-   * @param mixed $callback
-   * @param array $arguments
-   *   Optional, array of parameters for callback; if omitted, the default arguments are ($snippetSpec, $html).
-   *
-   * public function addCallback($callback, $arguments = FALSE) {
-   * return $this->add(array(
-   * 'type' => 'callback',
-   * 'callback' => $callback,
-   * 'arguments' => $arguments,
-   * ));
-   * }
-   */
 
 }

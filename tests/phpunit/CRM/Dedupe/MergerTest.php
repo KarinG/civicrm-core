@@ -284,9 +284,25 @@ class CRM_Dedupe_MergerTest extends CiviUnitTestCase {
    * The goal of this function is to test that all required tables are returned.
    */
   public function testGetCidRefs() {
+    $sortRefs = function($a) {
+      ksort($a);
+      foreach ($a as &$fields) {
+        sort($fields);
+      }
+      return $a;
+    };
+
     $this->entityCustomGroupWithSingleFieldCreate(__FUNCTION__, 'Contacts');
-    $this->assertEquals($this->getStaticCIDRefs(), CRM_Dedupe_Merger::cidRefs());
-    $this->assertEquals($this->getCalculatedCIDRefs(), CRM_Dedupe_Merger::cidRefs());
+
+    // These are deliberately unset.
+    $unsetRefs = array_fill_keys(['civicrm_group_contact_cache', 'civicrm_acl_cache', 'civicrm_acl_contact_cache'], 1);
+    $this->assertEquals($sortRefs(array_diff_key($this->getStaticCIDRefs(), $unsetRefs)), $sortRefs(CRM_Dedupe_Merger::cidRefs()));
+    $this->assertEquals($sortRefs(array_diff_key($this->getCalculatedCIDRefs(), $unsetRefs)), $sortRefs(CRM_Dedupe_Merger::cidRefs()));
+
+    // These are deliberately unset.
+    // $unsetRefs = array_fill_keys(['civicrm_group_contact_cache', 'civicrm_acl_cache', 'civicrm_acl_contact_cache', 'civicrm_relationship_cache'], 1);
+    // $this->assertEquals(array_diff_key($this->getStaticCIDRefs(), $unsetRefs), CRM_Dedupe_Merger::cidRefs());
+    // $this->assertEquals(array_diff_key($this->getCalculatedCIDRefs(), $unsetRefs), CRM_Dedupe_Merger::cidRefs());
   }
 
   /**
@@ -321,6 +337,66 @@ class CRM_Dedupe_MergerTest extends CiviUnitTestCase {
         'canMerge' => TRUE,
       ],
     ], $pairs);
+  }
+
+  /**
+   * Test function that gets duplicate pairs.
+   *
+   * It turns out there are 2 code paths retrieving this data so my initial
+   * focus is on ensuring they match.
+   *
+   * @dataProvider getBooleanDataProvider
+   *
+   * @param bool $isReverse
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testGetMatchesExcludeDeleted($isReverse) {
+    $this->setupMatchData();
+    $pairs = $this->callAPISuccess('Dedupe', 'getduplicates', [
+      'rule_group_id' => 1,
+      'check_permissions' => TRUE,
+      'criteria' => ['Contact' => ['id' => 'IS NOT NULL']],
+    ])['values'];
+    $this->assertCount(2, $pairs);
+    $this->callAPISuccess('Contact', 'delete', ['id' => ($isReverse ? $pairs[0]['dstID'] : $pairs[0]['srcID'])]);
+    $pairs = $this->callAPISuccess('Dedupe', 'getduplicates', [
+      'rule_group_id' => 1,
+      'check_permissions' => TRUE,
+      'criteria' => ['Contact' => ['id' => ['>' => 1]]],
+    ])['values'];
+    $this->assertCount(1, $pairs);
+  }
+
+  /**
+   * Test that location type is ignored when deduping by postal address.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testGetMatchesIgnoreLocationType() {
+    $contact1 = $this->individualCreate();
+    $contact2 = $this->individualCreate();
+    $this->callAPISuccess('address', 'create', [
+      'contact_id' => $contact1,
+      'state_province_id' => 1049,
+      'location_type_id' => 1,
+    ]);
+    $this->callAPISuccess('address', 'create', [
+      'contact_id' => $contact2,
+      'state_province_id' => 1049,
+      'location_type_id' => 2,
+    ]);
+    $ruleGroup = $this->createRuleGroup();
+    $this->callAPISuccess('Rule', 'create', [
+      'dedupe_rule_group_id' => $ruleGroup['id'],
+      'rule_table' => 'civicrm_address',
+      'rule_field' => 'state_province_id',
+      'rule_weight' => 8,
+    ]);
+    $dupeCount = $this->callAPISuccess('Dedupe', 'getduplicates', [
+      'rule_group_id' => $ruleGroup['id'],
+    ])['count'];
+    $this->assertEquals($dupeCount, 1);
   }
 
   /**
@@ -1295,6 +1371,10 @@ class CRM_Dedupe_MergerTest extends CiviUnitTestCase {
       'civicrm_relationship' => [
         0 => 'contact_id_a',
         1 => 'contact_id_b',
+      ],
+      'civicrm_relationship_cache' => [
+        0 => 'near_contact_id',
+        1 => 'far_contact_id',
       ],
       'civicrm_report_instance' => [
         0 => 'created_id',

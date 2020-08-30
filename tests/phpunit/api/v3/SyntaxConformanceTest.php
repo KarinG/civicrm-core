@@ -578,7 +578,8 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
     // Re:^^^ => the failure was probably correct behavior, and test is now fixed, but yeah 5.5 is deprecated, and don't care enough to verify.
     // Test data providers should be able to run in pre-boot environment, so we connect directly to SQL server.
     require_once 'DB.php';
-    $db = DB::connect(CIVICRM_DSN);
+    $dsn = CRM_Utils_SQL::autoSwitchDSN(CIVICRM_DSN);
+    $db = DB::connect($dsn);
     if ($db->connection instanceof mysqli && $db->connection->server_version < 50600) {
       $entitiesWithout[] = 'Dedupe';
     }
@@ -1317,6 +1318,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
       return;
     }
 
+    $floatFields = [];
     $baoString = _civicrm_api3_get_BAO($entityName);
     $this->assertNotEmpty($baoString, $entityName);
     $this->assertNotEmpty($entityName, $entityName);
@@ -1438,6 +1440,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
 
         case CRM_Utils_Type::T_FLOAT:
         case CRM_Utils_Type::T_MONEY:
+          $floatFields[] = $field;
           $entity[$field] = '22.75';
           break;
 
@@ -1505,6 +1508,9 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
         $entity[$field] = CRM_Core_DAO::serializeField($checkEntity[$field], $specs['serialize']);
       }
 
+      foreach ($floatFields as $floatField) {
+        $checkEntity[$floatField] = rtrim($checkEntity[$floatField], "0");
+      }
       $this->assertAPIArrayComparison($entity, $checkEntity, [], "checking if $fieldName was correctly updated\n" . print_r([
         'update-params' => $updateParams,
         'update-result' => $update,

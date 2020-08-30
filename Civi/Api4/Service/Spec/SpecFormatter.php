@@ -67,19 +67,16 @@ class SpecFormatter {
       $field->setHelpPre($data['help_pre'] ?? NULL);
       $field->setHelpPost($data['help_post'] ?? NULL);
       $field->setOptions(self::customFieldHasOptions($data));
-      if (\CRM_Core_BAO_CustomField::isSerialized($data)) {
-        $field->setSerialize(\CRM_Core_DAO::SERIALIZE_SEPARATOR_BOOKEND);
-      }
     }
     else {
       $name = $data['name'] ?? NULL;
       $field = new FieldSpec($name, $entity, $dataTypeName);
       $field->setRequired(!empty($data['required']));
       $field->setTitle($data['title'] ?? NULL);
+      $field->setLabel($data['html']['label'] ?? NULL);
       $field->setOptions(!empty($data['pseudoconstant']));
-      $field->setSerialize($data['serialize'] ?? NULL);
     }
-
+    $field->setSerialize($data['serialize'] ?? NULL);
     $field->setDefaultValue($data['default'] ?? NULL);
     $field->setDescription($data['description'] ?? NULL);
     self::setInputTypeAndAttrs($field, $data, $dataTypeName);
@@ -145,10 +142,6 @@ class SpecFormatter {
     $inputAttrs = $data['html'] ?? [];
     unset($inputAttrs['type']);
 
-    if (strstr($inputType, 'Multi-Select') || ($inputType == 'Select' && !empty($data['serialize']))) {
-      $inputAttrs['multiple'] = TRUE;
-      $inputType = 'Select';
-    }
     $map = [
       'Select State/Province' => 'Select',
       'Select Country' => 'Select',
@@ -156,6 +149,9 @@ class SpecFormatter {
       'Link' => 'Url',
     ];
     $inputType = $map[$inputType] ?? $inputType;
+    if ($inputType == 'Select' && !empty($data['serialize'])) {
+      $inputAttrs['multiple'] = TRUE;
+    }
     if ($inputType == 'Date' && !empty($inputAttrs['formatType'])) {
       self::setLegacyDateFormat($inputAttrs);
     }
