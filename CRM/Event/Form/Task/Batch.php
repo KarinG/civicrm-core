@@ -260,19 +260,15 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
    * @param int $participantId
    * @param int $statusId
    *
-   * @return mixed
    * @throws \CRM_Core_Exception
    * @throws \CiviCRM_API3_Exception
    */
   public static function updatePendingOnlineContribution($participantId, $statusId) {
-    if (!$participantId || !$statusId) {
-      return NULL;
-    }
 
     $contributionId = CRM_Contribute_BAO_Contribution::checkOnlinePendingContribution($participantId,
       'Event'
     );
-    if (!$contributionId) {
+    if (!$contributionId || !$participantId) {
       return;
     }
 
@@ -284,30 +280,22 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
     $negativeStatuses = CRM_Event_PseudoConstant::participantStatus(NULL, "class = 'Negative'");
     $contributionStatuses = CRM_Contribute_PseudoConstant::contributionStatus(NULL, 'name');
 
-    $contributionStatusId = NULL;
     if (array_key_exists($statusId, $positiveStatuses)) {
-      $contributionStatusId = array_search('Completed', $contributionStatuses);
+      $params = [
+        'component_id' => $participantId,
+        'contribution_id' => $contributionId,
+        'contribution_status_id' => array_search('Completed', $contributionStatuses),
+        'IAmAHorribleNastyBeyondExcusableHackInTheCRMEventFORMTaskClassThatNeedsToBERemoved' => 1,
+      ];
+
+      //change related contribution status.
+      self::updateContributionStatus($params);
     }
     if (array_key_exists($statusId, $negativeStatuses)) {
-      $contributionStatusId = array_search('Cancelled', $contributionStatuses);
-    }
-
-    if (!$contributionStatusId) {
+      civicrm_api3('Contribution', 'create', ['id' => $contributionId, 'contribution_status_id' => 'Cancelled']);
       return;
     }
 
-    $params = [
-      'component_id' => $participantId,
-      'componentName' => 'Event',
-      'contribution_id' => $contributionId,
-      'contribution_status_id' => $contributionStatusId,
-      'IAmAHorribleNastyBeyondExcusableHackInTheCRMEventFORMTaskClassThatNeedsToBERemoved' => 1,
-    ];
-
-    //change related contribution status.
-    $updatedStatusId = self::updateContributionStatus($params);
-
-    return $updatedStatusId;
   }
 
   /**
@@ -315,7 +303,6 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
    *
    * @param array $params
    *
-   * @return NULL|int
    * @throws \CRM_Core_Exception
    * @throws \CiviCRM_API3_Exception
    * @throws \Exception
@@ -329,17 +316,13 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
     // get minimum required values.
     $statusId = $params['contribution_status_id'] ?? NULL;
     $componentId = $params['component_id'] ?? NULL;
-    $componentName = $params['componentName'] ?? NULL;
     $contributionId = $params['contribution_id'] ?? NULL;
-
-    if (!$contributionId || !$componentId || !$componentName || !$statusId) {
-      return NULL;
-    }
 
     $input = $ids = $objects = [];
 
     //get the required ids.
     $ids['contribution'] = $contributionId;
+    $ids['participant'] = $params['component_id'];
 
     if (!$ids['contact'] = CRM_Utils_Array::value('contact_id', $params)) {
       $ids['contact'] = CRM_Core_DAO::getFieldValue('CRM_Contribute_DAO_Contribution',
@@ -348,25 +331,14 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
       );
     }
 
-    if ($componentName === 'Event') {
-      $name = 'event';
-      $ids['participant'] = $componentId;
-
-      if (!$ids['event'] = CRM_Utils_Array::value('event_id', $params)) {
-        $ids['event'] = CRM_Core_DAO::getFieldValue('CRM_Event_DAO_Participant',
-          $componentId,
-          'event_id'
-        );
-      }
+    if (!$ids['event'] = CRM_Utils_Array::value('event_id', $params)) {
+      $ids['event'] = CRM_Core_DAO::getFieldValue('CRM_Event_DAO_Participant',
+        $componentId,
+        'event_id'
+      );
     }
 
-    if ($componentName === 'Membership') {
-      $name = 'contribute';
-      $ids['membership'] = $componentId;
-    }
-    $ids['contributionPage'] = NULL;
-    $ids['contributionRecur'] = NULL;
-    $input['component'] = $name;
+    $input['component'] = 'event';
 
     $baseIPN = new CRM_Core_Payment_BaseIPN();
 
@@ -385,17 +357,11 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
       'flip' => 1,
     ]);
     $input['IAmAHorribleNastyBeyondExcusableHackInTheCRMEventFORMTaskClassThatNeedsToBERemoved'] = $params['IAmAHorribleNastyBeyondExcusableHackInTheCRMEventFORMTaskClassThatNeedsToBERemoved'] ?? NULL;
-    if ($statusId == $contributionStatuses['Cancelled']) {
-      $transaction = new CRM_Core_Transaction();
-      $baseIPN->cancelled($objects, $transaction, $input);
-      $transaction->commit();
-      return $statusId;
-    }
-    elseif ($statusId == $contributionStatuses['Failed']) {
+    if ($statusId == $contributionStatuses['Failed']) {
       $transaction = new CRM_Core_Transaction();
       $baseIPN->failed($objects, $transaction, $input);
       $transaction->commit();
-      return $statusId;
+      return;
     }
 
     // status is not pending
@@ -428,12 +394,14 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
     //complete the contribution.
     // @todo use the api - ie civicrm_api3('Contribution', 'completetransaction', $input);
     // as this method is not preferred / supported.
-    CRM_Contribute_BAO_Contribution::completeOrder($input, $ids, $objects);
+    CRM_Contribute_BAO_Contribution::completeOrder($input, [
+      'related_contact' => $ids['related_contact'] ?? NULL,
+      'participant' => !empty($objects['participant']) ? $objects['participant']->id : NULL,
+      'contributionRecur' => NULL,
+    ], $objects);
 
     // reset template values before processing next transactions
     $template->clearTemplateVars();
-
-    return $statusId;
   }
 
   /**
@@ -513,7 +481,7 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
         if ($statusChange) {
           CRM_Event_BAO_Participant::transitionParticipants([$key], $value['status_id'], $fromStatusId);
         }
-        if ($relatedStatusChange) {
+        if ($relatedStatusChange && $key && $value['status_id']) {
           //update related contribution status, CRM-4395
           self::updatePendingOnlineContribution($key, $value['status_id']);
         }

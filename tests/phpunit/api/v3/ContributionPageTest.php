@@ -1862,7 +1862,6 @@ class api_v3_ContributionPageTest extends CiviUnitTestCase {
     $submitParams = [
       'price_' . $this->_ids['price_field'][0] => reset($this->_ids['price_field_value']),
       'id' => (int) $this->_ids['contribution_page'],
-      'amount' => 80,
       'first_name' => 'Billy',
       'last_name' => 'Gruff',
       'email' => 'billy@goat.gruff',
@@ -1870,7 +1869,7 @@ class api_v3_ContributionPageTest extends CiviUnitTestCase {
     ];
     $this->addPriceFields($submitParams);
 
-    $this->callAPISuccess('contribution_page', 'submit', $submitParams);
+    $this->callAPISuccess('ContributionPage', 'submit', $submitParams);
     $contribution = $this->callAPISuccessGetSingle('contribution', [
       'contribution_page_id' => $this->_ids['contribution_page'],
       'contribution_status_id' => 'Pending',
@@ -1957,6 +1956,7 @@ class api_v3_ContributionPageTest extends CiviUnitTestCase {
       'label' => 'Printing Rights',
       'html_type' => 'Text',
     ]);
+
     $this->callAPISuccess('price_field_value', 'create', [
       'price_set_id' => $priceSetID,
       'price_field_id' => $priceField['id'],
@@ -1969,26 +1969,49 @@ class api_v3_ContributionPageTest extends CiviUnitTestCase {
     // Set quantity for our test
     $submitParams['price_' . $priceFieldId] = 180;
 
-    // contribution_page submit requires amount and tax_amount - and that's ok we're not testing that - we're testing at the LineItem level
-    $submitParams['amount'] = $this->formatMoneyInput(180 * 16.95);
-    // This is the correct Tax Amount - use it later to compare to what the CiviCRM Core came up with at the LineItem level
-    $submitParams['tax_amount'] = $this->formatMoneyInput(180 * 16.95 * 0.10);
+    $priceField = $this->callAPISuccess('price_field', 'create', [
+      'price_set_id' => $priceSetID,
+      'label' => 'Another Line Item',
+      'html_type' => 'Text',
+    ]);
 
-    $this->callAPISuccess('contribution_page', 'submit', $submitParams);
+    $this->callAPISuccess('price_field_value', 'create', [
+      'price_set_id' => $priceSetID,
+      'price_field_id' => $priceField['id'],
+      'label' => 'Another Line Item',
+      'financial_type_id' => $financialTypeId,
+      'amount' => '2.95',
+    ]);
+    $priceFieldId = $priceField['id'];
+
+    // Set quantity for our test
+    $submitParams['price_' . $priceFieldId] = 110;
+
+    // This is the correct Tax Amount - use it later to compare to what the CiviCRM Core came up with at the LineItem level
+    $submitParams['tax_amount'] = (180 * 16.95 * 0.10 + 110 * 2.95 * 0.10);
+
+    $this->callAPISuccess('ContributionPage', 'submit', $submitParams);
+    $this->validateAllContributions();
+
     $contribution = $this->callAPISuccessGetSingle('contribution', [
       'contribution_page_id' => $this->_ids['contribution_page'],
     ]);
 
     // Retrieve the lineItem that belongs to the Printing Rights and check the tax_amount CiviCRM Core calculated for it
-    $lineItem = $this->callAPISuccessGetSingle('LineItem', [
+    $lineItem1 = $this->callAPISuccessGetSingle('LineItem', [
       'contribution_id' => $contribution['id'],
       'label' => 'Printing Rights',
     ]);
 
-    $lineItem_TaxAmount = round($lineItem['tax_amount'], 2);
+    // Retrieve the lineItem that belongs to the Another Line Item and check the tax_amount CiviCRM Core calculated for it
+    $lineItem2 = $this->callAPISuccessGetSingle('LineItem', [
+      'contribution_id' => $contribution['id'],
+      'label' => 'Another Line Item',
+    ]);
 
-    $this->assertEquals($lineItem['line_total'], $contribution['total_amount'], 'Contribution total should match line total');
-    $this->assertEquals($lineItem_TaxAmount, round(180 * 16.95 * 0.10, 2), 'Wrong Sales Tax Amount is calculated and stored.');
+    $finalContribution = $this->callAPISuccess('Contribution', 'getsingle', ['id' => $contribution['id'], 'return' => ['tax_amount', 'total_amount']]);
+    $this->assertEquals($lineItem1['line_total'] + $lineItem2['line_total'], round(180 * 16.95 + 110 * 2.95, 2), 'Line Item Total is incorrect.');
+    $this->assertEquals(round($lineItem1['tax_amount'] + $lineItem2['tax_amount'], 2), round(180 * 16.95 * 0.10 + 110 * 2.95 * 0.10, 2), 'Wrong Sales Tax Amount is calculated and stored.');
   }
 
   /**

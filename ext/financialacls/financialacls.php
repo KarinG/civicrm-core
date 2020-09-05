@@ -146,7 +146,7 @@ function financialacls_civicrm_themes(&$themes) {
 /**
  * Intervene to prevent deletion, where permissions block it.
  *
- * @param \CRM_Core_DAO $op
+ * @param string $op
  * @param string $objectName
  * @param int|null $id
  * @param array $params
@@ -155,17 +155,39 @@ function financialacls_civicrm_themes(&$themes) {
  * @throws \CRM_Core_Exception
  */
 function financialacls_civicrm_pre($op, $objectName, $id, &$params) {
-  if ($objectName === 'LineItem' && $op === 'delete' && !empty($params['check_permissions'])) {
+  if ($objectName === 'LineItem' && !empty($params['check_permissions'])) {
     if (CRM_Financial_BAO_FinancialType::isACLFinancialTypeStatus()) {
-      CRM_Financial_BAO_FinancialType::getAvailableFinancialTypes($types, CRM_Core_Action::DELETE);
+      $operationMap = ['delete' => CRM_Core_Action::DELETE, 'edit' => CRM_Core_Action::UPDATE, 'create' => CRM_Core_Action::ADD];
+      CRM_Financial_BAO_FinancialType::getAvailableFinancialTypes($types, $operationMap[$op]);
       if (empty($params['financial_type_id'])) {
         $params['financial_type_id'] = CRM_Core_DAO::getFieldValue('CRM_Price_DAO_LineItem', $params['id'], 'financial_type_id');
       }
       if (!in_array($params['financial_type_id'], array_keys($types))) {
-        throw new API_Exception('You do not have permission to delete this line item');
+        throw new API_Exception('You do not have permission to ' . $op . ' this line item');
       }
     }
   }
+}
+
+/**
+ * Implements hook_civicrm_selectWhereClause().
+ *
+ * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_selectWhereClause
+ */
+function financialacls_civicrm_selectWhereClause($entity, &$clauses) {
+  if ($entity === 'LineItem') {
+    if (CRM_Financial_BAO_FinancialType::isACLFinancialTypeStatus()) {
+      $types = [];
+      CRM_Financial_BAO_FinancialType::getAvailableFinancialTypes($types);
+      if ($types) {
+        $clauses['financial_type_id'] = 'IN (' . implode(',', array_keys($types)) . ')';
+      }
+      else {
+        $clauses['financial_type_id'] = '= 0';
+      }
+    }
+  }
+
 }
 
 // --- Functions below this ship commented out. Uncomment as required. ---
